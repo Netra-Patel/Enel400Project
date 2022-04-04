@@ -5,10 +5,12 @@
 #else
   #include <ESP8266WiFi.h>
 #endif
-//#include <ESPAsyncWebServer.h>
+#include <ESPAsyncWebServer.h>
 #include <Wire.h>
-#include "DHT.h"
+#include <DHT.h>
 #include <ESP8266WiFi.h> 
+#include <LiquidCrystal.h>
+#include <LiquidCrystal_I2C.h>
 
 
 // Default Threshold Temperature Value
@@ -33,14 +35,14 @@ const char index_html[] PROGMEM = R"rawliteral(
   </form>
 </body></html>)rawliteral";
 
-//
-//void notFound(AsyncWebServerRequest *request) {
-//  request->send(404, "text/plain", "Not found");
-//}
 
-//AsyncWebServer server(80);
+void notFound(AsyncWebServerRequest *request) {
+  request->send(404, "text/plain", "Not found");
+}
 
-WiFiServer server(80);
+AsyncWebServer server(80);
+
+
 
 
 // Replaces placeholder with DS18B20 values
@@ -66,7 +68,8 @@ const char* PARAM_INPUT_2 = "enable_arm_input";
 
 // Interval between sensor readings. Learn more about ESP32 timers: https://RandomNerdTutorials.com/esp32-pir-motion-sensor-interrupts-timers/
 unsigned long previousMillis = 0;     
-const long interval = 5000;    
+const long interval = 1000*10;  
+//5000  
 
 // GPIO where the output is connected to
 #define DHTPIN D5 
@@ -74,16 +77,30 @@ const long interval = 5000;
 DHT dht(DHTPIN, DHTTYPE);
 
 // GPIO where the output is connected to
-const int output = 2;
+const int output = D6;
 
 
-
-
-
+#define ONBOARD_LED  2
+//LiquidCrystal lcd(D8, D7, D1, D2, D3, D4);
+//new
+LiquidCrystal_I2C lcd(0x27,20,4);
 
 void setup() {
+  dht.begin(); //Sensor turn on
   Serial.begin(115200);         // Start the Serial communication to send messages to the computer
   Serial.println('\n');
+//  lcd.begin(16, 2);
+//  lcd.print("Hello");
+//  lcd.setCursor(0,1);
+//  lcd.print("World");
+
+  lcd.init();                      // initialize the lcd 
+  lcd.backlight();
+  lcd.setCursor(1,0);
+  lcd.print("hello");
+  lcd.setCursor(1,1);
+  lcd.print("world");
+  
   WiFi.begin("TELUS46DA", "XK4sGDbashLh");             // Connect to the network
   Serial.print("Connecting to Wifi");
   Serial.println(" ...");
@@ -99,18 +116,14 @@ void setup() {
   Serial.println("Connection established!");  
   Serial.print("IP address:\t");
   Serial.println(WiFi.localIP());         // Send the IP address of the ESP8266 to the computer
-}
 
-
-  dht.begin(); //Sensor turn on
-
-  pinMode(output, OUTPUT);
-  digitalWrite(output, LOW);
+  //pinMode(output, OUTPUT);
+  //digitalWrite(output, LOW);
+  pinMode(ONBOARD_LED,OUTPUT);
 
   Serial.println();
   Serial.print("ESP IP Address: http://");
   Serial.println(WiFi.localIP());
-
 
 
  // Send web page to client
@@ -139,13 +152,15 @@ void setup() {
   });
   server.onNotFound(notFound);
   server.begin();
+
 }
 
 void loop() { 
+  //delay(1000*60);
   unsigned long currentMillis = millis();
   if (currentMillis - previousMillis >= interval) {
     previousMillis = currentMillis;
-    float t = dht.readTemperature();
+    float temperature = dht.readTemperature();
     Serial.print(temperature);
     Serial.println(" *C");
     lastTemperature = String(temperature);
@@ -155,16 +170,30 @@ void loop() {
       String message = String("Temperature above threshold. Current temperature: ") + 
                             String(temperature) + String("C");
       Serial.println(message);
+//      lcd.begin(16, 2);
+      lcd.init();                      // initialize the lcd 
+      lcd.backlight();
+      lcd.print("Temp too high");
+      lcd.setCursor(0,1);
+      lcd.print("Temp is " + String(temperature) + " *C");
       triggerActive = true;
-      digitalWrite(output, HIGH);
+      //digitalWrite(output, HIGH);
+      digitalWrite(ONBOARD_LED,HIGH);
     }
     // Check if temperature is below threshold and if it needs to trigger output
     else if((temperature < inputMessage.toFloat()) && inputMessage2 == "true" && triggerActive) {
       String message = String("Temperature below threshold. Current temperature: ") + 
                             String(temperature) + String(" C");
       Serial.println(message);
+//      lcd.begin(16, 2);
+      lcd.init();                      // initialize the lcd 
+      lcd.backlight();
+      lcd.print("Temp too low");
+      lcd.setCursor(0,1);
+      lcd.print("Temp is " + String(temperature) + " *C");
       triggerActive = false;
-      digitalWrite(output, LOW);
+      //digitalWrite(output, LOW);
+      digitalWrite(ONBOARD_LED,LOW);
     }
   }
 }
@@ -172,4 +201,4 @@ void loop() {
   
   
   
-  }
+ 
